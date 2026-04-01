@@ -1,0 +1,39 @@
+name: task_manager
+
+services:
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: task_manager_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Магия сохранения данных тут
+  app:
+    build: .
+    container_name: fastapi_app
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    environment:
+      database_url: "postgresql+psycopg2://user:pass@db:5432/task_manager_db"
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
+
+    
+
+volumes:
+  postgres_data:
