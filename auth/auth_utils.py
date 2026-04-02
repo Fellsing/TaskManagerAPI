@@ -8,6 +8,7 @@ from pwdlib import PasswordHash
 from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -61,7 +62,8 @@ def authenticate_user(db:Session, username:str, password:str):
 
 
 def get_user(db: Session, username: str):
-    user = db.query(UserDB).filter((UserDB.username == username)|(UserDB.email==username)).first()
+    statement = select(UserDB).where((UserDB.username == username)|(UserDB.email==username))
+    user = db.execute(statement).scalar_one_or_none()
     if user:
         return user
 
@@ -99,3 +101,19 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: An
     if user is None:
         raise credentials_exception
     return user
+
+# спец функция для оптимизации запросов к БД. функция не обращается к БД, работает только с токеном, что является выгодным, но малоприменимым вариантом :)
+async def get_current_user_id(token: Annotated[str, Depends(oauth2_scheme)]):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Couldnt validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY,ALGORITHM)
+        user_id = payload.get("user_id")
+        if user_id is None:
+            raise credentials_exception
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+    return user_id

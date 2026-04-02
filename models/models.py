@@ -15,7 +15,7 @@ class UserDB(Base):
     email: Mapped[str] = mapped_column(String(50), unique=True)
     hashed_password: Mapped[str] = mapped_column(String(100))
 
-    tasks: Mapped["TaskDB"] = relationship(back_populates="user")
+    tasks: Mapped[list["TaskDB"]] = relationship(back_populates="user")
 
 
 class TaskDB(Base):
@@ -23,6 +23,7 @@ class TaskDB(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(30))
     description: Mapped[str] = mapped_column(String(500))
+    creation_date: Mapped[datetime] = mapped_column(DateTime)
     deadline: Mapped[datetime] = mapped_column(DateTime)
     status: Mapped[bool] = mapped_column(Boolean, default=False)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))

@@ -33,7 +33,7 @@ async def login_user(form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверное имя пользователя или пароль", headers={"WWW-Authenticate": "Bearer"})
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token({"sub":user.username},access_token_expires)
+    access_token = create_access_token({"sub":user.username, "user_id":user.id},access_token_expires)
     return Token(access_token=access_token, token_type="bearer")
 
 
