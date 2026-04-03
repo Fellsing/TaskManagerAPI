@@ -27,5 +27,7 @@ class TaskDB(Base):
     deadline: Mapped[datetime] = mapped_column(DateTime)
     status: Mapped[bool] = mapped_column(Boolean, default=False)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    notification_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+
 
     user: Mapped["UserDB"] = relationship(back_populates="tasks")

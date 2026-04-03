@@ -10,13 +10,14 @@ services:
       POSTGRES_PASSWORD: pass
       POSTGRES_DB: task_manager_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data  # Магия сохранения данных тут
+      - postgres_data:/var/lib/postgresql/data  
   app:
     build: .
     container_name: fastapi_app
     restart: always
     depends_on:
       - db
+      - redis
     ports:
       - "8000:8000"
     env_file:
@@ -25,6 +26,36 @@ services:
       - .:/app
     environment:
       database_url: "postgresql+psycopg2://user:pass@db:5432/task_manager_db"
+  
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+    restart: always
+
+  celery_worker:
+    build: .
+    container_name: celery_worker
+    command: celery -A core.celery_config.celery_app worker --loglevel=info
+    depends_on:
+      - redis
+      - db
+    env_file:
+      - .env
+    environment:
+     - REDIS_URL=redis://redis:6379/0
+     - PYTHONBUFFERED=1
+
+  celery_beat:
+    build: .
+    container_name: celery_beat
+    command: celery -A core.celery_config.celery_app beat --loglevel=info
+    depends_on:
+      - redis
+    env_file:
+      - .env
 
   adminer:
     image: adminer
