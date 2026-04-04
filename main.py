@@ -9,8 +9,6 @@ app = FastAPI()
 app.include_router(auth_router)
 app.include_router(task_router)
 
-UserDB.metadata.create_all(bind=engine)
-
 @app.get("/")
 async def root():
     return {"status":"hello world"}
