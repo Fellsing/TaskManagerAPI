@@ -41,12 +41,20 @@ async def get_tasks(db: Annotated[Session, Depends(get_db)], cur_user: Annotated
     res = db.execute(query).scalars().all()
     return res
 
-@router.post("/delete/{task_id}")
+@router.get("/me/{task_id}")
+async def get_task_by_id(db: Annotated[Session, Depends(get_db)], cur_user: Annotated[UserDB, Depends(get_current_user)], task_id: int):
+    query = select(TaskDB).where(TaskDB.owner_id==cur_user.id, TaskDB.id==task_id)
+    task = db.execute(query).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Данной записи не существует")
+    return task
+
+@router.delete("/delete/{task_id}")
 async def delete_task(db: Annotated[Session, Depends(get_db)], cur_user: Annotated[UserDB, Depends(get_current_user)], task_id:int):
     query = select(TaskDB).where(TaskDB.owner_id==cur_user.id, TaskDB.id==task_id)
     task = db.execute(query).scalar_one_or_none()
     if task is None:
-        raise HTTPException(status_code=400, detail="Данной записи не существует")
+        raise HTTPException(status_code=404, detail="Данной записи не существует")
     db.delete(task)
     db.commit()
     return {"status":f"Запись с ИД {task_id} успешно удалена"}

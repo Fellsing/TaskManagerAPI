@@ -11,7 +11,7 @@ SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread":False})
 session = sessionmaker(bind=engine, autoflush=False)
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def setup_database():
     Base.metadata.create_all(bind=engine)
     yield
