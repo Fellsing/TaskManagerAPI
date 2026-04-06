@@ -6,6 +6,7 @@ from celery import Celery
 from dotenv import load_dotenv
 import os
 from fastapi import Depends
+import redis
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,7 @@ load_dotenv()
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 celery_app = Celery("tasks", broker=REDIS_URL, backend=REDIS_URL)
+redis_broker = redis.Redis(host='redis', port=6379, decode_responses=True)
 
 celery_app.conf.update(
     task_serializer="json",
@@ -60,7 +62,7 @@ def check_deadlines():
         cur_time = datetime.now(timezone.utc)
         one_hour_from_ccur = cur_time + timedelta(hours=1)
         query = (
-            select(UserDB.email, TaskDB.title, TaskDB.id)
+            select(UserDB.id, UserDB.email, TaskDB.title, TaskDB.id)
             .join(UserDB, UserDB.id == TaskDB.owner_id)
             .where(
                 TaskDB.notification_sent == False,
@@ -68,8 +70,10 @@ def check_deadlines():
                 TaskDB.deadline > cur_time,
             )
         )
+        
         results = db.execute(query).all()
-        for email, title, task_id in results:
+        for user_id, email, title, task_id in results:
+            redis_broker.publish(f"user_{user_id}_notifications", f"Дедлайн по задаче: {title} наступит уже через час!")
             send_uved_email.delay(email, title)
             db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
         db.commit()
