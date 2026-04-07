@@ -72,8 +72,13 @@ def check_deadlines():
         )
         
         results = db.execute(query).all()
+        
         for user_id, email, title, task_id in results:
-            redis_broker.publish(f"user_{user_id}_notifications", f"Дедлайн по задаче: {title} наступит уже через час!")
-            send_uved_email.delay(email, title)
-            db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
+            is_online = redis_broker.get(f"user_online: {user_id}")
+            if is_online:
+                redis_broker.publish(f"user_{user_id}_notifications", f"Дедлайн по задаче: {title} наступит уже через час!")
+                db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
+            else:
+                send_uved_email.delay(email, title)
+                db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
         db.commit()
