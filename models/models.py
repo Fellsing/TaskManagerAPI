@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
-from sqlalchemy import DateTime, String, ForeignKey, Boolean
+from sqlalchemy import BigInteger, DateTime, String, ForeignKey, Boolean
 from typing import Optional, Annotated
 
 
@@ -14,6 +14,7 @@ class UserDB(Base):
     username: Mapped[str] = mapped_column(String(30), unique=True)
     email: Mapped[str] = mapped_column(String(50), unique=True)
     hashed_password: Mapped[str] = mapped_column(String(100))
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=True)
 
     tasks: Mapped[list["TaskDB"]] = relationship(back_populates="user")
 

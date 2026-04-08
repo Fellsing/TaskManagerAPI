@@ -1,7 +1,9 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 import smtplib
 from email.message import EmailMessage
 from typing import Annotated
+from aiogram import Bot
 from celery import Celery
 from dotenv import load_dotenv
 import os
@@ -16,7 +18,7 @@ from models.models import TaskDB, UserDB
 
 load_dotenv()
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-
+bot = Bot(token=os.getenv("TGBOT_TOKEN"))
 celery_app = Celery("tasks", broker=REDIS_URL, backend=REDIS_URL)
 redis_broker = redis.Redis(host='redis', port=6379, decode_responses=True)
 
@@ -30,6 +32,17 @@ celery_app.conf.update(
 
 
 celery_app.conf.beat_schedule = {"check_every_three_minutes":{"task":"check_deadlines", "schedule": 180.0}}
+
+
+@celery_app.task(name ="send_tg_notification")
+def send_telegram_notification(chat_id:int, message:str):
+    async def _send():
+        bot1 = Bot(token=os.getenv("TGBOT_TOKEN"))
+        try:
+            await bot1.send_message(chat_id=chat_id, text=message)
+        finally:
+            bot1.session.close()
+    asyncio.run(_send())
 
 @celery_app.task(name="send_uvedomlenie")
 def send_uved_email(receiver_email: str, title: str):
@@ -62,7 +75,7 @@ def check_deadlines():
         cur_time = datetime.now(timezone.utc)
         one_hour_from_ccur = cur_time + timedelta(hours=1)
         query = (
-            select(UserDB.id, UserDB.email, TaskDB.title, TaskDB.id)
+            select(UserDB.id, UserDB.email, UserDB.telegram_id,  TaskDB.title, TaskDB.id)
             .join(UserDB, UserDB.id == TaskDB.owner_id)
             .where(
                 TaskDB.notification_sent == False,
@@ -73,12 +86,15 @@ def check_deadlines():
         
         results = db.execute(query).all()
         
-        for user_id, email, title, task_id in results:
+        for user_id, email, tg_id, title, task_id in results:
             is_online = redis_broker.get(f"user_online: {user_id}")
             if is_online:
                 redis_broker.publish(f"user_{user_id}_notifications", f"Дедлайн по задаче: {title} наступит уже через час!")
-                db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
+            elif tg_id:
+                send_telegram_notification.delay(tg_id, f"⏰ Напоминание! Дедлайн по задаче '{title}' менее чем через час!")
+            
             else:
                 send_uved_email.delay(email, title)
-                db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
+                
+            db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
         db.commit()

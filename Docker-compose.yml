@@ -65,7 +65,16 @@ services:
     ports:
       - 8080:8080
 
-
+  telegram-bot:
+    build: .
+    command: python -m bot.main
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
     
 
 volumes:

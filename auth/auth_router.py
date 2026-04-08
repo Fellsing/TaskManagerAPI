@@ -1,4 +1,5 @@
 from typing import Annotated
+import uuid
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import datetime, timedelta, timezone
@@ -16,7 +17,9 @@ from database import get_db
 from models.models import UserDB
 from schemas.users import UserCreate
 
-from auth.auth_utils import Token, authenticate_user, create_access_token, get_user, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from core.redis_config import redis_client
+
+from auth.auth_utils import Token, authenticate_user, create_access_token, get_current_user, get_user, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 
 router = APIRouter()
@@ -41,3 +44,16 @@ async def create_user(user_data:UserCreate, db: Annotated[Session, Depends(get_d
     db.commit()
     db.refresh(new_user)
     return {"status":f"Пользователь {new_user.username} успешно зарегистрирован!"}
+
+
+
+@router.get("/auth/telegram-link")
+async def get_tg_link(user: Annotated[UserDB, Depends(get_current_user)]):
+    token = str(uuid.uuid4())
+
+    redis_client.set(f"tg_auth:{token}", user.id, ex=1800)
+
+    bot_username = "FellsingTasksBot"
+    link = f"https://t.me/{bot_username}?start={token}"
+
+    return {"link":link}
