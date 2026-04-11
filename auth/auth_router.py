@@ -11,8 +11,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pwdlib import PasswordHash
 from pydantic import BaseModel, EmailStr
 
-from sqlalchemy.orm import Session
-
+from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models.models import UserDB
 from schemas.users import UserCreate
@@ -25,8 +24,8 @@ from auth.auth_utils import Token, authenticate_user, create_access_token, get_c
 router = APIRouter()
 
 @router.post("/auth/signin")
-async def login_user(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db:Annotated[Session, Depends(get_db)])-> Token:
-    user = authenticate_user(db,form_data.username, form_data.password)
+async def login_user(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db:Annotated[AsyncSession, Depends(get_db)])-> Token:
+    user = await authenticate_user(db,form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверное имя пользователя или пароль", headers={"WWW-Authenticate": "Bearer"})
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -35,14 +34,14 @@ async def login_user(form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 
 
 @router.post("/auth/signup")
-async def create_user(user_data:UserCreate, db: Annotated[Session, Depends(get_db)]):
-    user = get_user(db, user_data.username)
+async def create_user(user_data:UserCreate, db: Annotated[AsyncSession, Depends(get_db)]):
+    user = await get_user(db, user_data.username)
     if user:
         raise HTTPException(status_code=400, detail="Пользователь уже существует")
     new_user = UserDB(username = user_data.username, email = user_data.email, hashed_password = PasswordHash.recommended().hash(user_data.password))
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
     return {"status":f"Пользователь {new_user.username} успешно зарегистрирован!"}
 
 

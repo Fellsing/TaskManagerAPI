@@ -3,27 +3,27 @@ import pytest_asyncio
 from httpx import AsyncClient,ASGITransport
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker,AsyncSession
 from database import get_db
 from models.models import Base
 from main import app
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread":False})
-session = sessionmaker(bind=engine, autoflush=False)
+SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+engine = create_async_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread":False})
+async_session = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 
-@pytest.fixture(scope="function", autouse=True)
-def setup_database():
-    Base.metadata.create_all(bind=engine)
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def setup_database():
+    async with engine.begin() as conn:
+        # run_sync позволяет выполнить синхронные методы метадаты в асинхронной среде
+        await conn.run_sync(Base.metadata.create_all)
     yield
-    Base.metadata.drop_all(bind=engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
-
-def override_get_db():
-    db = session()
-    try:
+async def override_get_db():
+    async with async_session() as db:
         yield db
-    finally:
-        db.close()
 
 
 app.dependency_overrides[get_db] = override_get_db

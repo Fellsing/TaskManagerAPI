@@ -12,7 +12,7 @@ import redis
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from database import get_db, session
+from database import get_db, async_session
 from models.models import TaskDB, UserDB
 
 
@@ -71,7 +71,7 @@ def send_uved_email(receiver_email: str, title: str):
 @celery_app.task(name="check_deadlines")
 def check_deadlines():
 
-    with session as db:
+    with async_session as db:
         cur_time = datetime.now(timezone.utc)
         one_hour_from_ccur = cur_time + timedelta(hours=1)
         query = (
