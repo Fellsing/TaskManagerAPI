@@ -3,10 +3,11 @@ import logging
 import os
 import sys
 from aiogram.filters import Command, CommandObject
-from aiogram import Bot, Dispatcher, types
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram import Bot, Dispatcher, types,F
 import aiohttp
 from dotenv import load_dotenv
-from sqlalchemy import desc, select, update
+from sqlalchemy import delete, desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.redis_config import redis_client
@@ -100,6 +101,7 @@ async def get_random_cat_picture(message: types.Message):
 @dp.message(Command("tasks"))
 async def get_user_tasks(message: types.Message):
     c_session = HttpClient.get_session()
+
     async with async_session() as db:
         user = await get_user_by_tg_id(db,message.from_user.id)
         if not user:
@@ -111,13 +113,25 @@ async def get_user_tasks(message: types.Message):
         if not tasks:
             await message.answer("У тебя нет задач. Отдыхай :з")
             return
-
+    builder = InlineKeyboardBuilder()
     text = "📋 **Твои задачи:**\n\n"
     for task in tasks:
-        status = "✅" if task.status else "⏳"
-        text += f"{status}{task.title}. Дедлайн: {task.deadline}\n"
-    await message.answer(text, parse_mode="Markdown")
+        builder.row(types.InlineKeyboardButton(text=f"🗑 {task.title}", callback_data=f"del_{task.id}"))
+        # status = "✅" if task.status else "⏳"
+        # text += f"{status}{task.title}. Дедлайн: {task.deadline}\n"
+    await message.answer("Ваши задачи (нажмите на кнопку, чтобы удалить):",
+        reply_markup=builder.as_markup())
+    
 
+@dp.callback_query(F.data.startswith("del_"))
+async def delete_task_handler(callback: types.CallbackQuery):
+    task_id = int(callback.data.split("_")[1])
+
+    async with async_session() as db:
+        await db.execute(delete(TaskDB).where(TaskDB.id==task_id))
+        await db.commit()
+
+    await callback.answer("Задача удалена")
 
 async def on_startup():
     logger.info("HTTP session started correctly.")
