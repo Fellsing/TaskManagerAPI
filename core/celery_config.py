@@ -4,7 +4,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import Annotated
 from aiogram import Bot
-from celery import Celery
+from celery import Celery, Task
 from dotenv import load_dotenv
 import os
 from fastapi import Depends
@@ -30,8 +30,23 @@ celery_app.conf.update(
     task_annotations={"tasks.send_uvedomlenie": "100/m"},
 )
 
+class AsyncTask(Task):
+    _loop = None
 
-celery_app.conf.beat_schedule = {"check_every_three_minutes":{"task":"check_deadlines", "schedule": 180.0}}
+    @property
+    def loop(self):
+        if self._loop is None or self._loop.is_closed():
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+        return self._loop
+
+    def __call__(self, *args, **kwargs):
+        return self.loop.run_until_complete(self.run(*args, **kwargs))
+
+celery_app.conf.beat_schedule = {"check_every_three_minutes":{"task":"check_deadlines", "schedule": 60.0}}
 
 
 @celery_app.task(name ="send_tg_notification")
@@ -68,11 +83,11 @@ def send_uved_email(receiver_email: str, title: str):
         return f"Ошибка при отправке: {e}"
 
 
-@celery_app.task(name="check_deadlines")
-def check_deadlines():
+@celery_app.task(name="check_deadlines", base=AsyncTask)
+async def check_deadlines():
 
-    with async_session as db:
-        cur_time = datetime.now(timezone.utc)
+    async with async_session() as db:
+        cur_time = datetime.now(timezone.utc).replace(tzinfo=None)
         one_hour_from_ccur = cur_time + timedelta(hours=1)
         query = (
             select(UserDB.id, UserDB.email, UserDB.telegram_id,  TaskDB.title, TaskDB.id)
@@ -84,9 +99,10 @@ def check_deadlines():
             )
         )
         
-        results = db.execute(query).all()
+        results = await db.execute(query)
+        res = results.all()
         
-        for user_id, email, tg_id, title, task_id in results:
+        for user_id, email, tg_id, title, task_id in res:
             is_online = redis_broker.get(f"user_online: {user_id}")
             if is_online:
                 redis_broker.publish(f"user_{user_id}_notifications", f"Дедлайн по задаче: {title} наступит уже через час!")
@@ -96,5 +112,5 @@ def check_deadlines():
             else:
                 send_uved_email.delay(email, title)
                 
-            db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
-        db.commit()
+            await db.execute(update(TaskDB).where(TaskDB.id==task_id).values(notification_sent=True))
+        await db.commit()

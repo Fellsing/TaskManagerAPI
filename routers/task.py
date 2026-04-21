@@ -19,6 +19,7 @@ from database import get_db
 from models.models import TaskDB, UserDB
 from schemas.tasks import TaskCreate, TaskUpdate
 from schemas.users import UserCreate
+from crud import add_new_task, update_task_crud, delete_task_crud, get_tasks_crud
 
 from auth.auth_utils import (
     Token,
@@ -40,15 +41,7 @@ async def create_task(
     task: TaskCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    db_note = TaskDB(
-        **task.model_dump(),
-        status=False,
-        owner_id=current_user.id,
-        creation_date=datetime.now(timezone.utc),
-    )
-    db.add(db_note)
-    await db.commit()
-    await db.refresh(db_note)
+    db_note = await add_new_task(db=db, owner_id=current_user.id, **task.model_dump())
     return db_note
 
 
@@ -57,12 +50,8 @@ async def get_tasks(
     db: Annotated[AsyncSession, Depends(get_db)],
     cur_user: Annotated[UserDB, Depends(get_current_user)],
 ):
-    query = await db.execute(
-        select(TaskDB)
-        .where(TaskDB.owner_id == cur_user.id)
-        .order_by(desc(TaskDB.deadline))
-    )
-    return query.scalars().all()
+    res = await get_tasks_crud(db, cur_user.id)
+    return res.scalars().all()
 
 
 @router.get("/me/{task_id}")
@@ -85,13 +74,7 @@ async def delete_task(
     cur_user: Annotated[UserDB, Depends(get_current_user)],
     task_id: int,
 ):
-    query = select(TaskDB).where(TaskDB.owner_id == cur_user.id, TaskDB.id == task_id)
-    task = await db.execute(query)
-    task_obj = task.scalar_one_or_none()
-    if task_obj is None:
-        raise HTTPException(status_code=404, detail="Данной записи не существует")
-    await db.delete(task_obj)
-    await db.commit()
+    await delete_task_crud(db, task_id, cur_user.id)
     return {"status": f"Запись с ИД {task_id} успешно удалена"}
 
 
@@ -102,14 +85,5 @@ async def update_task(
     cur_user: Annotated[UserDB, Depends(get_current_user)],
     task_data: TaskUpdate,
 ):
-    query = select(TaskDB).where(TaskDB.owner_id == cur_user.id, TaskDB.id == task_id)
-    task = await db.execute(query)
-    task_obj = task.scalar_one_or_none()
-    if task_obj is None:
-        raise HTTPException(status_code=400, detail="Данной записи не существует")
-    updated_task_attrs = task_data.model_dump(exclude_unset=True)
-    for key, value in updated_task_attrs.items():
-        setattr(task_obj, key, value)
-    await db.commit()
-    await db.refresh(task_obj)
-    return task_obj
+    task = await update_task_crud(db=db, task_id=task_id, user_id=cur_user.id, **task_data.model_dump())
+    return task
