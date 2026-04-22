@@ -1,8 +1,8 @@
+import os
 import sys
 import time
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import engine, MetaData
 from auth.auth_router import router as auth_router
 from routers.task import router as task_router
 from routers.notifications import router as notify_router
@@ -49,14 +49,16 @@ async def task_not_fount_exception_handler(request: Request, exc: NotEnoughPermi
     )
 
 
-@app.middleware("http")
-async def process_time_header(request: Request, call_next):
-    start_time = time.perf_counter()
-    response = await call_next(request)
-    process_time = time.perf_counter() - start_time
-    logger.info(f"Path: {request.url.path} | Process time: {process_time:.4f} sec")
-    response.headers["X-Process-Time"] = str(process_time)
-    return response
+# @app.middleware("http")
+# async def process_time_header(request: Request, call_next):
+#     if os.getenv("TESTING"): 
+#         return await call_next(request)
+#     start_time = time.perf_counter()
+#     response = await call_next(request)
+#     process_time = time.perf_counter() - start_time
+#     logger.info(f"Path: {request.url.path} | Process time: {process_time:.4f} sec")
+#     response.headers["X-Process-Time"] = str(process_time)
+#     return response
 
 
 @app.get("/")

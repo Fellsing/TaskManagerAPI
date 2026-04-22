@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import os
 from typing import Annotated
+import uuid
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -18,11 +19,13 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY", "insanely-giga-secre-key-monster")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30*3600*24))
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
+
 
 
 class TokenData(BaseModel):
@@ -67,6 +70,12 @@ async def get_user(db: AsyncSession, username: str):
     res = user.scalar_one_or_none()
     return res
 
+async def get_user_by_id(db: AsyncSession, user_id: int):
+    user = await db.execute(
+        select(UserDB).where(UserDB.id == user_id)
+    )
+    res = user.scalar_one_or_none()
+    return res
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     data_copy = data.copy()
@@ -79,6 +88,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(data_copy, SECRET_KEY, ALGORITHM)
     return encoded_jwt
 
+def create_refresh_token():
+    return str(uuid.uuid4())
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/signin")
 

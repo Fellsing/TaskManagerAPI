@@ -1,15 +1,33 @@
-import redis
+import redis.asyncio as redis
 import os
 
-REDIS_HOST = os.getenv("REDIS_URL", "redis")
-
-try:
-    redis_client = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True, socket_connect_timeout=2)
-    redis_client.ping()
-    print("Redis successfully working!")
-except redis.ConnectionError:
-    print("Cannot connect to Redis, Plase, check your docker-compose services settings.")
+# REDIS_URL = os.getenv("REDIS_URL", "redis")
 
 
-def get_redis():
-    return redis_client
+# if REDIS_URL.startswith("redis://"):
+#     redis_client= redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=2)
+# else: 
+#     redis_client = redis.Redis(host=REDIS_URL, port=6379, db=0, decode_responses=True, socket_connect_timeout=2)
+    
+# REDIS_URL = os.getenv("REDIS_URL", "localhost") # Для Windows лучше localhost
+
+# # Создаем объект без автоматического открытия соединения
+# redis_client = redis.from_url(
+#     f"redis://{REDIS_URL}:6379" if not REDIS_URL.startswith("redis://") else REDIS_URL,
+#     decode_responses=True,
+#     auto_close_connection_pool=False # Важно для тестов
+# )
+
+
+def get_redis_client():
+    REDIS_URL = os.getenv("REDIS_URL", "localhost")
+    return redis.from_url(
+        f"redis://{REDIS_URL}:6379" if not REDIS_URL.startswith("redis://") else REDIS_URL,
+        decode_responses=True
+    )
+
+# Оставляем переменную для совместимости, но не инициализируем её сразу активным соединением
+redis_client = get_redis_client()
+
+# def get_redis():
+#     return redis_client
