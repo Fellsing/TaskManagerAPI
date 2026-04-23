@@ -3,9 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import datetime, timedelta, timezone
-import os
 from typing import Annotated
-import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pwdlib import PasswordHash
@@ -16,7 +14,7 @@ from database import get_db
 from models.models import UserDB
 from schemas.users import UserCreate
 
-from core.redis_config import redis_client
+from core.redis_config import redis_client, get_redis_client
 
 from auth.auth_utils import (
     Token,
@@ -35,11 +33,21 @@ from auth.auth_utils import (
 
 router = APIRouter()
 
+async def get_redis():
+    client = get_redis_client()
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 @router.post("/auth/signin")
 async def login_user(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis = Depends(get_redis)
 ) -> Token:
     user = await authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -53,7 +61,7 @@ async def login_user(
         {"sub": user.username, "user_id": user.id}, access_token_expires
     )
     refresh_token = create_refresh_token()
-    await redis_client.set(
+    await redis.set(
         f"refresh_token:{refresh_token}",
         user.id,
         ex=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
@@ -82,7 +90,8 @@ async def create_user(
 
 
 @router.post("/auth/refresh")
-async def refresh_tokens(refresh_token:str, db: Annotated[AsyncSession, Depends(get_db)]):
+async def refresh_tokens(request_data:RefreshTokenRequest, db: Annotated[AsyncSession, Depends(get_db)]):
+    refresh_token = request_data.refresh_token
     user_id = await redis_client.get(f"refresh_token:{refresh_token}")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")

@@ -23,7 +23,8 @@ def get_redis_client():
     REDIS_URL = os.getenv("REDIS_URL", "localhost")
     return redis.from_url(
         f"redis://{REDIS_URL}:6379" if not REDIS_URL.startswith("redis://") else REDIS_URL,
-        decode_responses=True
+        decode_responses=True,socket_timeout=5,
+        socket_connect_timeout=5
     )
 
 # Оставляем переменную для совместимости, но не инициализируем её сразу активным соединением

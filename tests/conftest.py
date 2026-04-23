@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from database import get_db
 from models.models import Base
 from main import app
-from core.redis_config import redis_client
+from core.redis_config import get_redis_client
+from auth.auth_router import get_redis
 
 os.environ["TESTING"] = "True"
 SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
@@ -40,9 +41,17 @@ async def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
+
+async def override_get_redis():
+    client = get_redis_client()
+    yield client
+    await client.aclose()
+
+
+app.dependency_overrides[get_redis] = override_get_redis
+
 @pytest.fixture(scope="session")
 def event_loop():
-    """Создает единый цикл событий для всей сессии (исправляет 'different loop' error)."""
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
@@ -53,5 +62,3 @@ async def ac():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         yield client
-    await redis_client.aclose()
-    await redis_client.connection_pool.disconnect()
