@@ -3,7 +3,7 @@ import os
 from typing import Annotated
 import uuid
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pwdlib import PasswordHash
 from dotenv import load_dotenv
@@ -13,13 +13,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models.models import UserDB
+import logging
 
+logger = logging.getLogger(__name__)
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "insanely-giga-secre-key-monster")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30*3600*24))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30))
 
 class Token(BaseModel):
     access_token: str
@@ -95,6 +97,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/signin")
 
 
 async def get_current_user(
+        response: Response,
     token: Annotated[str, Depends(oauth2_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -106,9 +109,17 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, ALGORITHM)
         username = payload.get("sub")
+        exp = payload.get("exp")
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
+        if exp:
+            cur_time = datetime.now(timezone.utc).timestamp()
+            remaining_time = exp -cur_time
+            if 0<remaining_time <=60:
+                response.headers["X-Refresh_Suggested"] = "true"
+                response.headers["Access-Control-Expose-Headers"] = "X-Refresh-Suggested"
+                logger.info(f"Token for user {username} expires in {int(remaining_time)}s. Suggesting refresh.")
     except jwt.InvalidTokenError:
         raise credentials_exception
     user = await get_user(db, username)
