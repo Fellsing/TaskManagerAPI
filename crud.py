@@ -69,9 +69,9 @@ async def delete_task_crud(db: AsyncSession, task_id: int, user_id: int):
     return True
 
 
-async def get_tasks_crud(db: AsyncSession, user_id: int):
-    logger.info(f"User {user_id} is checking own tasks.")
+async def get_tasks_crud(db: AsyncSession, user_id: int, skip:int, limit:int):
+    logger.info(f"User {user_id} is checking own tasks with offset {skip} and limit {limit}.")
     res = await db.execute(
-        select(TaskDB).where(TaskDB.owner_id == user_id).order_by(desc(TaskDB.deadline))
+        select(TaskDB).where(TaskDB.owner_id == user_id).order_by(desc(TaskDB.deadline)).offset(skip).limit(limit)
     )
     return res

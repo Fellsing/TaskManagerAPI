@@ -49,8 +49,10 @@ async def create_task(
 async def get_tasks(
     db: Annotated[AsyncSession, Depends(get_db)],
     cur_user: Annotated[UserDB, Depends(get_current_user)],
+    skip: int = 0,
+    limit: int = 10,
 ):
-    res = await get_tasks_crud(db, cur_user.id)
+    res = await get_tasks_crud(db, cur_user.id, skip, limit)
     return res.scalars().all()
 
 
@@ -85,5 +87,7 @@ async def update_task(
     cur_user: Annotated[UserDB, Depends(get_current_user)],
     task_data: TaskUpdate,
 ):
-    task = await update_task_crud(db=db, task_id=task_id, user_id=cur_user.id, **task_data.model_dump())
+    task = await update_task_crud(
+        db=db, task_id=task_id, user_id=cur_user.id, **task_data.model_dump()
+    )
     return task
